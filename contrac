@@ -1,0 +1,158 @@
+pragma solidity ^0.4.21;
+
+contract AssetTracker{
+    // attribtes of the manufacturer
+    string mName;
+    uint[] assetOwnedByManufacturer;
+    address mAddress;
+    string manufactoring_origin;
+    
+    // attributes of the Product
+    struct Product{
+        
+        uint weight;
+        string geolocation;
+        string productName;
+        string currentOwner;
+        string date_of_manufactoring;
+        bool initialized;
+        
+    }
+    // atttribute of the owner who will buy the product
+    struct owners{
+        string name;
+        string geolocation;
+        mapping(uint => Product)Products;
+    }
+    
+    mapping(address => owners) public owner;
+    
+    struct AssetTransferDetails{
+        string currentOwner;
+        address currentOwnerAddress;
+        string currentLocation;
+        string[] previousOwner;
+        string[] previousOwnersLocation;
+        string date;
+    }
+    
+    // Map the asset transfer detail 
+    mapping(uint => AssetTransferDetails) details;
+    
+    
+    // functions
+    function AssetTracker(string _mName,string _origin) public payable{
+        mName= _mName;
+        mAddress = msg.sender;
+        manufactoring_origin = _origin;
+    }
+    // Get manufacturer detail who Sale the product
+    function getManufacturerName() public view returns(string,string,address){
+        return (mName,manufactoring_origin,mAddress);
+    }
+    
+    //Make event for asset creation and deletion
+    
+    event AssetCreate(address account,uint SKU,string message,string date);
+    event RejectCreate(address account,uint SKU,string message);
+    
+    
+    function createAsset(uint _SKU,string _productName,uint _weight,
+    string _geolocation,string _date) public payable{
+        
+        if(!owner[mAddress].Products[_SKU].initialized){
+            owner[mAddress].Products[_SKU].initialized = true;
+            owner[mAddress].Products[_SKU].weight = _weight;
+            owner[mAddress].Products[_SKU].geolocation = _geolocation;
+            owner[mAddress].Products[_SKU].productName = _productName;
+            owner[mAddress].Products[_SKU].date_of_manufactoring = _date;
+            owner[mAddress].Products[_SKU].currentOwner = "XYZ";
+            
+            
+            details[_SKU].currentOwner = "XYZ";
+            details[_SKU].currentOwnerAddress = msg.sender;
+            details[_SKU].currentLocation = "Pakistan";
+            assetOwnedByManufacturer.push(_SKU);
+            emit AssetCreate(msg.sender,_SKU,"Asset Created!",_date);
+            
+        }else{
+            emit RejectCreate(msg.sender,_SKU,"Asset Already Exist!");
+        }
+    }
+    
+    // create an event if asset is not Exist
+    event AssetDoesNotExist(string message);
+    
+    // Get specific product through SKU ID 
+    function getSpecificProduct(uint _skuNumber) public view returns(uint ,string,string,string,string){
+        if(owner[mAddress].Products[_skuNumber].initialized){
+            return(
+                owner[mAddress].Products[_skuNumber].weight,
+                owner[mAddress].Products[_skuNumber].geolocation,
+                owner[mAddress].Products[_skuNumber].productName,
+                owner[mAddress].Products[_skuNumber].date_of_manufactoring,
+                owner[mAddress].Products[_skuNumber].currentOwner
+                
+                );
+        }else{
+            emit AssetDoesNotExist("Asset Does Not Exist");
+            
+        }
+    }
+    
+    
+    // get the list of #SKU of products owned by manufacturer
+    function getListOfAssetOwnedByManufacturer() public view returns(uint[]){
+        return assetOwnedByManufacturer;
+    }
+    //get the current owner of the asset
+    function getCurrentOwnerOfAsset(uint _skuNumber) public view returns(string,string){
+        return(details[_skuNumber].currentOwner,details[_skuNumber].currentLocation);
+    }
+    
+    // get the two previous owner and their location 
+    function getPreviousOwnerOfAsset(uint _SKU) public view returns(string,string,string,string){
+        return(
+          details[_SKU].previousOwner[details[_SKU].previousOwner.length -1],
+          details[_SKU].previousOwnersLocation[details[_SKU].previousOwnersLocation.length -1],
+          details[_SKU].previousOwner[details[_SKU].previousOwner.length -2],
+          details[_SKU].previousOwnersLocation[details[_SKU].previousOwnersLocation.length -2]
+          
+          
+            );
+    }
+    
+    // Function for the transfer of ether in exchange of the asset
+    function transferEther(address _EtherReceiver,address _EtherSender) private{
+        _EtherReceiver.transfer(msg.value);
+    }
+    
+    // events that trigger on successfull transfer of ownership
+   event AcceptOwnerships(address ownerAdd,string message,string name,string location,uint _SKU,string date);
+    event RejectOwnerships(address ownerAdd,string message);
+
+    // transfer the ownership of the asset in exchange of money
+    function transferToOwner(address _AssetSender,address _AssetReceiver,
+    string _NewOwnerName,uint _SKU,string _geolocation,string _date) public payable{
+        if(owner[_AssetSender].Products[_SKU].initialized){
+            owner[_AssetReceiver].name = _NewOwnerName;
+            owner[_AssetReceiver].geolocation = _geolocation;
+            
+            details[_SKU].previousOwner.push(details[_SKU].currentOwner);
+            details[_SKU].previousOwnersLocation.push(details[_SKU].currentLocation);
+            details[_SKU].currentOwner = _NewOwnerName;
+            details[_SKU].currentLocation = _geolocation;
+            
+            //transfers ether for Asset exchange
+            transferEther(msg.sender,_AssetReceiver);
+            
+             // Event is triggered in exchange of ownership
+           emit AcceptOwnerships(msg.sender, "Assset Transfered",details[_SKU].currentOwner,details[_SKU].currentLocation,_SKU,_date);
+            
+        }else {
+             // ownership is rejected if asset does not exist
+            emit RejectOwnerships(msg.sender, "Asset does not exist");
+        }
+    }
+    
+}
